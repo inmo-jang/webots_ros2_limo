@@ -62,6 +62,11 @@ def generate_launch_description():
                 ('map', nav2_map),
                 ('params_file', params_file),
                 ('use_sim_time', use_sim_time),
+                # Pin bringup's own 'slam' argument. Launch configurations
+                # propagate into included launch files, so robot_launch.py's
+                # `slam:=false` would otherwise land here -- and bringup
+                # evaluates it as a Python literal (`not false` -> NameError).
+                ('slam', 'False'),
             ]),
 
         Node(

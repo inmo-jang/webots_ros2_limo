@@ -122,8 +122,8 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.1
+      yaw_goal_tolerance: 0.1
 
     # DWB parameters
     FollowPath:
@@ -153,10 +153,10 @@ controller_server:
       angular_granularity: 0.025
       transform_tolerance: 0.2
       # Must match general_goal_checker.xy_goal_tolerance. DWB only switches
-      # to "rotate to the goal heading" once it is inside *this* radius; with
-      # 0.05 the robot hovered at 4-6 cm from the goal, kept re-aiming at a
-      # point 5 cm away and spun on the spot for minutes.
-      xy_goal_tolerance: 0.25
+      # to "rotate to the goal heading" once it is inside *this* radius; if it
+      # is smaller than the goal checker's, the robot stops short of it, keeps
+      # re-aiming at the goal point and spins on the spot.
+      xy_goal_tolerance: 0.1
       trans_stopped_velocity: 0.25
       short_circuit_trajectory_evaluation: True
       stateful: True

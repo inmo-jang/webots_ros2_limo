@@ -175,7 +175,7 @@ ros2 launch webots_ros2_limo nav2_launch.py drive:=mecanum
 |---|---|---|
 | Robot model | `LimoFourDiff.proto` | `LimoMecanum.proto` |
 | Controller | `diff_drive_controller` | `mecanum_drive_controller` |
-| Nav2 controller | DWB | MPPI, `motion_model: Omni` |
+| Nav2 controller | DWB | DWB, holonomic (keeps its heading while driving) |
 | AMCL motion model | differential | omnidirectional |
 
 The mecanum rollers are not modelled geometrically: as in the Webots KUKA youBot,
@@ -226,7 +226,7 @@ webots_ros2_limo/
 │   │   └── nav2_params.yaml    # Nav2 parameters (DWB)
 │   └── mecanum/
 │       ├── ros2control.yaml    # mecanum_drive_controller config
-│       └── nav2_params.yaml    # Nav2 parameters (MPPI Omni)
+│       └── nav2_params.yaml    # Nav2 parameters (DWB, holonomic)
 ├── webots_ros2_limo/
 │   └── limo_odometry.py        # /odom + odom->base_link TF from encoders + IMU
 ├── doc/

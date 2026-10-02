@@ -171,6 +171,11 @@ For navigation, start Nav2 with the same drive:
 ros2 launch webots_ros2_limo nav2_launch.py drive:=mecanum
 ```
 
+The robot keeps its heading while it drives and turns to the goal heading only
+after it has arrived:
+
+![Nav2 driving the mecanum LIMO to goals set in RViz without turning on the way (3x speed)](doc/mecanum.gif)
+
 | | `drive:=diff` | `drive:=mecanum` |
 |---|---|---|
 | Robot model | `LimoFourDiff.proto` | `LimoMecanum.proto` |
@@ -230,7 +235,7 @@ webots_ros2_limo/
 ├── webots_ros2_limo/
 │   └── limo_odometry.py        # /odom + odom->base_link TF from encoders + IMU
 ├── doc/
-│   └── cartographer.gif, nav2.gif
+│   └── cartographer.gif, nav2.gif, mecanum.gif
 ├── rviz/
 │   └── limo_cartographer.rviz  # SLAM view
 └── worlds/

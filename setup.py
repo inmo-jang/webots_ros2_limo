@@ -14,8 +14,8 @@ data_files.append(('share/' + package_name + '/resource', [
     'resource/limo.urdf',
     'resource/nav2_params_limo.yaml',
     'resource/limo_lds_2d.lua',
-    'resource/limo_example_map.yaml',
-    'resource/limo_example_map.pgm',
+    'resource/limo_world_map.yaml',
+    'resource/limo_world_map.pgm',
 ]))
 data_files.append(('share/' + package_name + '/launch', [
     'launch/robot_launch.py',
@@ -37,9 +37,10 @@ setup(
     maintainer_email='inmo.jang@kau.ac.kr',
     description='AgileX LIMO (four-wheel diff) Webots simulation with webots_ros2_driver + ros2_control + Nav2.',
     license='Apache-2.0',
-    tests_require=['pytest'],
+    extras_require={'test': ['pytest']},
     entry_points={
         'console_scripts': [
+            'limo_odometry = webots_ros2_limo.limo_odometry:main',
         ],
     },
 )

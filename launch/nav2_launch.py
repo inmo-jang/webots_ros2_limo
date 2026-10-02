@@ -26,7 +26,7 @@ def generate_launch_description():
     package_dir = get_package_share_directory('webots_ros2_limo')
     nav2_bringup_dir = get_package_share_directory('nav2_bringup')
 
-    default_map = os.path.join(package_dir, 'resource', 'limo_example_map.yaml')
+    default_map = os.path.join(package_dir, 'resource', 'limo_world_map.yaml')
     default_params = os.path.join(package_dir, 'resource',
                                   'nav2_params_limo.yaml')
     default_rviz = os.path.join(nav2_bringup_dir, 'rviz',

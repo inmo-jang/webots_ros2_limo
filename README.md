@@ -42,8 +42,9 @@ ros2 launch webots_ros2_limo robot_launch.py
 ```
 
 This starts Webots with the LIMO robot, the `webots_ros2_driver`, the
-`ros2_control` spawners and `robot_state_publisher`. Odometry comes from
-`diff_drive_controller`, publishing `/odom` and the `odom -> base_link` TF.
+`ros2_control` spawners and `robot_state_publisher`. `limo_odometry` publishes
+`/odom` and the `odom -> base_link` TF, taking distance from the wheel encoders
+and heading from the IMU.
 
 Drive it with the keyboard:
 
@@ -62,7 +63,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 | `mode` | `realtime` | Webots startup mode (`realtime`, `fast`, `pause`) |
 | `slam` | `false` | Also start SLAM + RViz in the same command |
 | `nav` | `false` | Also start Nav2 + RViz in the same command |
-| `map` | `resource/limo_example_map.yaml` | Map used when `nav:=true` |
+| `map` | `resource/limo_world_map.yaml` | Map used when `nav:=true` |
 | `use_sim_time` | `true` | Use the Webots `/clock` as ROS 2 time |
 
 ---
@@ -87,9 +88,11 @@ ros2 launch webots_ros2_limo cartographer_launch.py
 Drive around with the keyboard teleop to build the map, then save it:
 
 ```bash
-ros2 run nav2_map_server map_saver_cli -f ~/limo_map
-# Output: ~/limo_map.yaml, ~/limo_map.pgm
+ros2 run nav2_map_server map_saver_cli -f limo_map
+# Output in the current directory: limo_map.yaml, limo_map.pgm
 ```
+
+![Cartographer SLAM in RViz while driving the LIMO with the keyboard (3x speed)](doc/cartographer.gif)
 
 | Argument | Default | Purpose |
 |---|---|---|
@@ -124,26 +127,22 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
   "{pose: {header: {frame_id: map}, pose: {position: {x: 1.1, y: -3.6}, orientation: {w: 1.0}}}}"
 ```
 
+![Nav2 driving the LIMO to a goal set in RViz (3x speed)](doc/nav2.gif)
+
 | Argument | Default | Purpose |
 |---|---|---|
-| `map` | `resource/limo_example_map.yaml` | Map yaml for AMCL to localise against |
+| `map` | `resource/limo_world_map.yaml` | Map yaml for AMCL to localise against |
 | `params_file` | `resource/nav2_params_limo.yaml` | Nav2 parameter file |
 | `use_rviz` | `true` | Open RViz with the Nav2 view |
 | `use_sim_time` | `true` | Use the Webots `/clock` as ROS 2 time |
 
-To navigate with your own map from step 4:
+To navigate with your own map from step 4, run this from the directory where
+you saved it:
 
 ```bash
-ros2 launch webots_ros2_limo nav2_launch.py map:=$HOME/limo_map.yaml
+ros2 launch webots_ros2_limo nav2_launch.py map:=limo_map.yaml
 ```
 
-The bundled map matches `limo_world.wbt`. For a different world, build a map
-with SLAM first and pass it via `map:=`.
-
-> **Start the two terminals one at a time.** Bringing the simulator and Nav2 up
-> in a single command (`nav:=true`) occasionally loses a startup race in which
-> Nav2's global costmap freezes the robot at the map origin: a path is planned,
-> but the robot only turns on the spot. If that happens, relaunch.
 
 ---
 
@@ -183,7 +182,11 @@ webots_ros2_limo/
 │   ├── ros2control.yaml        # diff_drive_controller config (LIMO wheel values)
 │   ├── limo_lds_2d.lua         # cartographer config
 │   ├── nav2_params_limo.yaml   # Nav2 parameters
-│   └── limo_example_map.{yaml,pgm}
+│   └── limo_world_map.{yaml,pgm}
+├── webots_ros2_limo/
+│   └── limo_odometry.py        # /odom + odom->base_link TF from encoders + IMU
+├── doc/
+│   └── cartographer.gif, nav2.gif
 ├── rviz/
 │   └── limo_cartographer.rviz  # SLAM view
 └── worlds/

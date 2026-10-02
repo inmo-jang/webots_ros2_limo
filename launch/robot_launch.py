@@ -31,7 +31,7 @@ def generate_launch_description():
     use_slam = LaunchConfiguration('slam', default=False)
     use_sim_time = LaunchConfiguration('use_sim_time', default=True)
     nav2_map = LaunchConfiguration(
-        'map', default=os.path.join(package_dir, 'resource', 'limo_example_map.yaml'))
+        'map', default=os.path.join(package_dir, 'resource', 'limo_world_map.yaml'))
 
     webots = WebotsLauncher(
         world=PathJoinSubstitution([package_dir, 'worlds', world]),
@@ -75,7 +75,6 @@ def generate_launch_description():
     ros2_control_params = os.path.join(package_dir, 'resource', 'ros2control.yaml')
     mappings = [
         ('/diffdrive_controller/cmd_vel_unstamped', '/cmd_vel'),
-        ('/diffdrive_controller/odom', '/odom'),
     ]
     limo_driver = WebotsController(
         robot_name='LIMO',
@@ -88,6 +87,16 @@ def generate_launch_description():
         remappings=mappings,
         respawn=True
     )
+
+    # Wheel encoders + IMU -> /odom and the odom -> base_link TF. The
+    # diff_drive_controller odometry is not used: see limo_odometry.py.
+    odometry = Node(
+        package='webots_ros2_limo',
+        executable='limo_odometry',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+    )
+    ros_control_spawners.append(odometry)
 
     # Optional stacks. Both launch files live in this package and each brings
     # its own RViz, so these shortcut arguments run exactly what the README
@@ -150,7 +159,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'map',
-            default_value=os.path.join(package_dir, 'resource', 'limo_example_map.yaml'),
+            default_value=os.path.join(package_dir, 'resource', 'limo_world_map.yaml'),
             description='Map yaml used when nav:=true'
         ),
         DeclareLaunchArgument(

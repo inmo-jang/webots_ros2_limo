@@ -18,7 +18,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 
 
@@ -27,8 +27,9 @@ def generate_launch_description():
     nav2_bringup_dir = get_package_share_directory('nav2_bringup')
 
     default_map = os.path.join(package_dir, 'resource', 'limo_world_map.yaml')
-    default_params = os.path.join(package_dir, 'resource',
-                                  'nav2_params_limo.yaml')
+    # resource/diff/nav2_params.yaml or resource/mecanum/nav2_params.yaml
+    default_params = PathJoinSubstitution(
+        [package_dir, 'resource', LaunchConfiguration('drive'), 'nav2_params.yaml'])
     default_rviz = os.path.join(nav2_bringup_dir, 'rviz',
                                 'nav2_default_view.rviz')
 
@@ -39,6 +40,9 @@ def generate_launch_description():
     rviz_config = LaunchConfiguration('rviz_config', default=default_rviz)
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'drive', default_value='diff', choices=['diff', 'mecanum'],
+            description='Drive type of the LIMO; selects the default params_file'),
         DeclareLaunchArgument(
             'use_sim_time', default_value='true',
             description='Use the Webots /clock as ROS 2 time'),

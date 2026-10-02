@@ -1,6 +1,6 @@
 # webots_ros2_limo
 
-AgileX **LIMO Pro** (four-wheel differential drive) in
+AgileX **LIMO Pro** (four-wheel differential drive, or mecanum wheels) in
 [Webots](https://cyberbotics.com), driven by `webots_ros2_driver` +
 `ros2_control`, with cartographer SLAM and Nav2 navigation.
 
@@ -59,7 +59,8 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard
 
 | Argument | Default | Purpose |
 |---|---|---|
-| `world` | `limo_world.wbt` | World file from `worlds/` |
+| `drive` | `diff` | `diff` (four-wheel differential) or `mecanum` (omnidirectional, see step 6) |
+| `world` | per `drive` | World file from `worlds/`: `limo_world.wbt` or `limo_world_mecanum.wbt` |
 | `mode` | `realtime` | Webots startup mode (`realtime`, `fast`, `pause`) |
 | `slam` | `false` | Also start SLAM + RViz in the same command |
 | `nav` | `false` | Also start Nav2 + RViz in the same command |
@@ -131,8 +132,9 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
 
 | Argument | Default | Purpose |
 |---|---|---|
+| `drive` | `diff` | Selects the default `params_file`; use the same value as in terminal 1 |
 | `map` | `resource/limo_world_map.yaml` | Map yaml for AMCL to localise against |
-| `params_file` | `resource/nav2_params_limo.yaml` | Nav2 parameter file |
+| `params_file` | `resource/<drive>/nav2_params.yaml` | Nav2 parameter file |
 | `use_rviz` | `true` | Open RViz with the Nav2 view |
 | `use_sim_time` | `true` | Use the Webots `/clock` as ROS 2 time |
 
@@ -143,6 +145,42 @@ you saved it:
 ros2 launch webots_ros2_limo nav2_launch.py map:=limo_map.yaml
 ```
 
+---
+
+## 6. Mecanum Drive
+
+With mecanum wheels the LIMO also moves sideways. Add `drive:=mecanum` to the
+launch commands of steps 3-5; everything else stays the same.
+
+```bash
+ros2 launch webots_ros2_limo robot_launch.py drive:=mecanum
+```
+
+`/cmd_vel` then also takes `linear.y` (positive = left):
+
+```bash
+ros2 topic pub -r 20 /cmd_vel geometry_msgs/msg/Twist "{linear: {y: 0.1}}"
+```
+
+In `teleop_twist_keyboard`, hold **Shift** for sideways motion: `J`/`L` strafe
+left/right, `U`/`O`/`M`/`>` move diagonally.
+
+For navigation, start Nav2 with the same drive:
+
+```bash
+ros2 launch webots_ros2_limo nav2_launch.py drive:=mecanum
+```
+
+| | `drive:=diff` | `drive:=mecanum` |
+|---|---|---|
+| Robot model | `LimoFourDiff.proto` | `LimoMecanum.proto` |
+| Controller | `diff_drive_controller` | `mecanum_drive_controller` |
+| Nav2 controller | DWB | MPPI, `motion_model: Omni` |
+| AMCL motion model | differential | omnidirectional |
+
+The mecanum rollers are not modelled geometrically: as in the Webots KUKA youBot,
+each wheel has an asymmetric contact friction rotated by ±45°, defined in
+`worlds/limo_world_mecanum.wbt`.
 
 ---
 
@@ -162,7 +200,8 @@ the camera topics keep the driver's default `/<robot name>/<device>` form.
 Cameras and point clouds are only sampled while something subscribes, so they
 cost nothing when unused.
 
-Robot control: `/cmd_vel` in, `/odom` and `odom -> base_link` TF out.
+Robot control: `/cmd_vel` in (`linear.x`, `angular.z`; with `drive:=mecanum` also
+`linear.y`), `/odom` and `odom -> base_link` TF out.
 
 ---
 
@@ -176,13 +215,18 @@ webots_ros2_limo/
 │   └── nav2_launch.py          # nav2_bringup + RViz, with this package's map
 ├── protos/
 │   ├── LimoFourDiff.proto      # AgileX LIMO robot model (4-wheel diff)
+│   ├── LimoMecanum.proto       # same robot with mecanum wheels
 │   └── meshes/                 # limo_base.dae, limo_wheel.dae
 ├── resource/
 │   ├── limo.urdf               # sensor <device> blocks + IMU plugin + ros2_control
-│   ├── ros2control.yaml        # diff_drive_controller config (LIMO wheel values)
 │   ├── limo_lds_2d.lua         # cartographer config
-│   ├── nav2_params_limo.yaml   # Nav2 parameters
-│   └── limo_world_map.{yaml,pgm}
+│   ├── limo_world_map.{yaml,pgm}
+│   ├── diff/
+│   │   ├── ros2control.yaml    # diff_drive_controller config
+│   │   └── nav2_params.yaml    # Nav2 parameters (DWB)
+│   └── mecanum/
+│       ├── ros2control.yaml    # mecanum_drive_controller config
+│       └── nav2_params.yaml    # Nav2 parameters (MPPI Omni)
 ├── webots_ros2_limo/
 │   └── limo_odometry.py        # /odom + odom->base_link TF from encoders + IMU
 ├── doc/
@@ -190,5 +234,6 @@ webots_ros2_limo/
 ├── rviz/
 │   └── limo_cartographer.rviz  # SLAM view
 └── worlds/
-    └── limo_world.wbt          # apartment world
+    ├── limo_world.wbt          # apartment world, LimoFourDiff
+    └── limo_world_mecanum.wbt  # same world, LimoMecanum
 ```

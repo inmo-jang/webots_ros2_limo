@@ -34,18 +34,22 @@
         </hardware>
         <joint name="front_left_wheel">
             <state_interface name="position"/>
+            <state_interface name="velocity"/>
             <command_interface name="velocity"/>
         </joint>
         <joint name="front_right_wheel">
             <state_interface name="position"/>
+            <state_interface name="velocity"/>
             <command_interface name="velocity"/>
         </joint>
         <joint name="rear_left_wheel">
             <state_interface name="position"/>
+            <state_interface name="velocity"/>
             <command_interface name="velocity"/>
         </joint>
         <joint name="rear_right_wheel">
             <state_interface name="position"/>
+            <state_interface name="velocity"/>
             <command_interface name="velocity"/>
         </joint>
     </ros2_control>

@@ -19,6 +19,9 @@
 #    encoder displacement per update is always exact, but when it is divided
 #    by the jittering stamp interval the reported speed comes out 10-15 % too
 #    high. Here the velocity is displacement over the known controller period.
+#
+# With mecanum wheels (kinematics:=mecanum) the same applies; the wheel
+# displacements then also give the sideways motion.
 
 import math
 
@@ -43,15 +46,21 @@ def wrap_angle(a):
 class LimoOdometry(Node):
     def __init__(self):
         super().__init__('limo_odometry')
+        # 'diff' (four-wheel differential) or 'mecanum' (omnidirectional)
+        self.declare_parameter('kinematics', 'diff')
         self.declare_parameter('wheel_radius', 0.045)
+        # Both lists are ordered [front, rear].
         self.declare_parameter('left_wheel_names', ['front_left_wheel', 'rear_left_wheel'])
         self.declare_parameter('right_wheel_names', ['front_right_wheel', 'rear_right_wheel'])
-        # 1 / controller_manager.update_rate (resource/ros2control.yaml)
+        # 1 / controller_manager.update_rate (resource/<drive>/ros2control.yaml)
         self.declare_parameter('controller_period', 0.04)
         self.declare_parameter('odom_frame_id', 'odom')
         self.declare_parameter('base_frame_id', 'base_link')
         self.declare_parameter('publish_tf', True)
 
+        self.kinematics = self.get_parameter('kinematics').value
+        if self.kinematics not in ('diff', 'mecanum'):
+            raise ValueError(f"kinematics must be 'diff' or 'mecanum', got '{self.kinematics}'")
         self.radius = self.get_parameter('wheel_radius').value
         self.left = list(self.get_parameter('left_wheel_names').value)
         self.right = list(self.get_parameter('right_wheel_names').value)
@@ -94,17 +103,23 @@ class LimoOdometry(Node):
             self.prev_yaw = self.imu_yaw
             return
 
-        # Distance travelled since the last update: mean of all wheels.
-        wheels = self.left + self.right
-        delta = sum(positions[w] - self.prev_positions[w] for w in wheels) / len(wheels)
-        distance = delta * self.radius
+        # Rim travel of each wheel since the last update.
+        fl, rl, fr, rr = (
+            (positions[w] - self.prev_positions[w]) * self.radius
+            for w in self.left + self.right)
         self.prev_positions = positions
+
+        # Body displacement in base_link: forward is the mean of all wheels;
+        # mecanum wheels also move the body sideways (same forward kinematics
+        # as ros2_controllers' mecanum_drive_controller).
+        dx = (fl + fr + rl + rr) / 4.0
+        dy = (-fl + fr + rl - rr) / 4.0 if self.kinematics == 'mecanum' else 0.0
 
         # Integrate along the mean heading over the interval.
         dyaw = wrap_angle(self.imu_yaw - self.prev_yaw)
         mid_yaw = self.prev_yaw + 0.5 * dyaw
-        self.x += distance * math.cos(mid_yaw)
-        self.y += distance * math.sin(mid_yaw)
+        self.x += dx * math.cos(mid_yaw) - dy * math.sin(mid_yaw)
+        self.y += dx * math.sin(mid_yaw) + dy * math.cos(mid_yaw)
         self.yaw = self.imu_yaw
         self.prev_yaw = self.imu_yaw
 
@@ -117,7 +132,8 @@ class LimoOdometry(Node):
         odom.pose.pose.position.x = self.x
         odom.pose.pose.position.y = self.y
         odom.pose.pose.orientation = q
-        odom.twist.twist.linear.x = distance / self.period
+        odom.twist.twist.linear.x = dx / self.period
+        odom.twist.twist.linear.y = dy / self.period
         odom.twist.twist.angular.z = self.imu_yaw_rate
         for i, v in ((0, 1e-3), (7, 1e-3), (14, 1e6), (21, 1e6), (28, 1e6), (35, 1e-3)):
             odom.pose.covariance[i] = v

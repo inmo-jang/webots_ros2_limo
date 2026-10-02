@@ -7,11 +7,14 @@
 #   * `slam:=true`  -> includes turtlebot3_cartographer (cartographer SLAM + RViz)
 #   * `nav:=true`   -> includes turtlebot3_navigation2 (Nav2/AMCL + RViz) with a saved map
 # Both are optional and only activate when the corresponding package is installed.
+#
+# `drive:=diff` (default) is the four-wheel differential LIMO, `drive:=mecanum`
+# the omnidirectional one. The drive selects the world (robot model), the
+# ros2_control controller and the Nav2 parameters in `resource/<drive>/`.
 
 import os
 from launch.substitutions import LaunchConfiguration
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions.path_join_substitution import PathJoinSubstitution
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch import LaunchDescription
 from launch_ros.actions import Node
 import launch
@@ -22,10 +25,28 @@ from webots_ros2_driver.webots_launcher import WebotsLauncher
 from webots_ros2_driver.webots_controller import WebotsController
 from webots_ros2_driver.wait_for_controller_connection import WaitForControllerConnection
 
+# Per drive: default world, ros2_control controller and the topic on which
+# that controller listens for velocity commands (remapped to /cmd_vel).
+DRIVES = {
+    'diff': {
+        'world': 'limo_world.wbt',
+        'controller': 'diffdrive_controller',
+        'cmd_vel_topic': '/diffdrive_controller/cmd_vel_unstamped',
+    },
+    'mecanum': {
+        'world': 'limo_world_mecanum.wbt',
+        'controller': 'mecanum_drive_controller',
+        'cmd_vel_topic': '/mecanum_drive_controller/reference_unstamped',
+    },
+}
 
-def generate_launch_description():
+
+def launch_setup(context):
     package_dir = get_package_share_directory('webots_ros2_limo')
-    world = LaunchConfiguration('world')
+    drive = LaunchConfiguration('drive').perform(context)
+    if drive not in DRIVES:
+        raise RuntimeError(f"drive must be one of {list(DRIVES)}, got '{drive}'")
+    world = LaunchConfiguration('world').perform(context) or DRIVES[drive]['world']
     mode = LaunchConfiguration('mode')
     use_nav = LaunchConfiguration('nav', default=False)
     use_slam = LaunchConfiguration('slam', default=False)
@@ -34,7 +55,7 @@ def generate_launch_description():
         'map', default=os.path.join(package_dir, 'resource', 'limo_world_map.yaml'))
 
     webots = WebotsLauncher(
-        world=PathJoinSubstitution([package_dir, 'worlds', world]),
+        world=os.path.join(package_dir, 'worlds', world),
         mode=mode,
         ros2_supervisor=True
     )
@@ -57,11 +78,11 @@ def generate_launch_description():
 
     # ROS control spawners
     controller_manager_timeout = ['--controller-manager-timeout', '50']
-    diffdrive_controller_spawner = Node(
+    drive_controller_spawner = Node(
         package='controller_manager',
         executable='spawner',
         output='screen',
-        arguments=['diffdrive_controller'] + controller_manager_timeout,
+        arguments=[DRIVES[drive]['controller']] + controller_manager_timeout,
     )
     joint_state_broadcaster_spawner = Node(
         package='controller_manager',
@@ -69,12 +90,12 @@ def generate_launch_description():
         output='screen',
         arguments=['joint_state_broadcaster'] + controller_manager_timeout,
     )
-    ros_control_spawners = [diffdrive_controller_spawner, joint_state_broadcaster_spawner]
+    ros_control_spawners = [drive_controller_spawner, joint_state_broadcaster_spawner]
 
     robot_description_path = os.path.join(package_dir, 'resource', 'limo.urdf')
-    ros2_control_params = os.path.join(package_dir, 'resource', 'ros2control.yaml')
+    ros2_control_params = os.path.join(package_dir, 'resource', drive, 'ros2control.yaml')
     mappings = [
-        ('/diffdrive_controller/cmd_vel_unstamped', '/cmd_vel'),
+        (DRIVES[drive]['cmd_vel_topic'], '/cmd_vel'),
     ]
     limo_driver = WebotsController(
         robot_name='LIMO',
@@ -89,12 +110,12 @@ def generate_launch_description():
     )
 
     # Wheel encoders + IMU -> /odom and the odom -> base_link TF. The
-    # diff_drive_controller odometry is not used: see limo_odometry.py.
+    # controller's own odometry is not used: see limo_odometry.py.
     odometry = Node(
         package='webots_ros2_limo',
         executable='limo_odometry',
         output='screen',
-        parameters=[{'use_sim_time': use_sim_time}],
+        parameters=[{'use_sim_time': use_sim_time, 'kinematics': drive}],
     )
     ros_control_spawners.append(odometry)
 
@@ -107,6 +128,7 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(os.path.join(
                 package_dir, 'launch', 'nav2_launch.py')),
             launch_arguments=[
+                ('drive', drive),
                 ('map', nav2_map),
                 ('use_sim_time', use_sim_time),
             ],
@@ -136,11 +158,42 @@ def generate_launch_description():
         nodes_to_start=navigation_nodes + ros_control_spawners
     )
 
+    return [
+        webots,
+        webots._supervisor,
+
+        robot_state_publisher,
+        footprint_publisher,
+
+        limo_driver,
+        waiting_nodes,
+
+        # This action will kill all nodes once the Webots simulation has exited
+        launch.actions.RegisterEventHandler(
+            event_handler=launch.event_handlers.OnProcessExit(
+                target_action=webots,
+                on_exit=[
+                    launch.actions.EmitEvent(event=launch.events.Shutdown())
+                ],
+            )
+        ),
+    ]
+
+
+def generate_launch_description():
+    package_dir = get_package_share_directory('webots_ros2_limo')
     return LaunchDescription([
         DeclareLaunchArgument(
+            'drive',
+            default_value='diff',
+            choices=list(DRIVES),
+            description='Drive type of the LIMO'
+        ),
+        DeclareLaunchArgument(
             'world',
-            default_value='limo_world.wbt',
-            description='Choose one of the world files from `webots_ros2_limo/worlds`'
+            default_value='',
+            description='World file from `webots_ros2_limo/worlds`. Empty: the '
+                        'default world of the chosen drive'
         ),
         DeclareLaunchArgument(
             'mode',
@@ -167,22 +220,5 @@ def generate_launch_description():
             default_value='true',
             description='Use the Webots /clock as ROS 2 time'
         ),
-        webots,
-        webots._supervisor,
-
-        robot_state_publisher,
-        footprint_publisher,
-
-        limo_driver,
-        waiting_nodes,
-
-        # This action will kill all nodes once the Webots simulation has exited
-        launch.actions.RegisterEventHandler(
-            event_handler=launch.event_handlers.OnProcessExit(
-                target_action=webots,
-                on_exit=[
-                    launch.actions.EmitEvent(event=launch.events.Shutdown())
-                ],
-            )
-        ),
+        OpaqueFunction(function=launch_setup),
     ])
